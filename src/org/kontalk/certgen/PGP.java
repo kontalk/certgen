@@ -64,7 +64,7 @@ import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyEncryptorBuilder;
 public class PGP {
 
     /** Security provider: Spongy Castle. */
-    public static final String PROVIDER = "SC";
+    public static final String PROVIDER = "BC";
 
     /** Default EC curve used. */
     private static final String EC_CURVE = "P-256";
