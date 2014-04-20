@@ -180,7 +180,7 @@ public class PGP {
 
         PGPSignatureGenerator       sGen = new PGPSignatureGenerator(
             new JcaPGPContentSignerBuilder(secret.getPublicKey().getAlgorithm(),
-                PGPUtil.SHA1).setProvider(PROVIDER));
+                PGPUtil.SHA512).setProvider(PROVIDER));
 
         sGen.init(certification, pgpPrivKey);
 
