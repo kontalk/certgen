@@ -3,6 +3,7 @@ package org.kontalk.certgen;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.security.SignatureException;
 import java.util.Iterator;
 
 import org.bouncycastle.bcpg.ArmoredInputStream;
@@ -20,6 +21,7 @@ import org.bouncycastle.openpgp.operator.bc.BcKeyFingerprintCalculator;
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPDigestCalculatorProviderBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyDecryptorBuilder;
 import org.kontalk.certgen.PGP.PGPDecryptedKeyPairRing;
+import org.kontalk.certgen.PGP.PGPKeyPairRing;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -43,13 +45,23 @@ public class CertificateGenerator {
     @Parameter(names = "--server-cert", description = "Path to the server public key file")
     public String serverPublicKeyring;
 
+    @Parameter(names = "--userid", description = "PGP user ID (format: name <email> (comment)")
+    public String userId;
+
+    @Parameter(names = "--passphrase", description = "PGP user passphrase (default: random)")
+    public String userPassphrase;
+
     private PGPDecryptedKeyPairRing serverKeyPair;
     private PGPDecryptedKeyPairRing userKeyPair;
+
+    private PGPKeyPairRing userStoredKeypair;
 
     public static void log(String fmt, Object... args) {
         System.err.println(String.format(fmt, args));
     }
 
+    /** Loads the server keys internally. */
+    @SuppressWarnings("unchecked")
     private void loadServerKeys() throws FileNotFoundException, IOException, PGPException {
         KeyFingerPrintCalculator fpr = new BcKeyFingerprintCalculator();
         PGPSecretKeyRing secRing = new PGPSecretKeyRing(new ArmoredInputStream(new FileInputStream(serverSecretKeyring)), fpr);
@@ -68,7 +80,7 @@ public class CertificateGenerator {
         PGPPrivateKey  encPriv = null;
 
         // public keys
-        Iterator<PGPPublicKey> pkeys = pubRing.getPublicKeys();
+		Iterator<PGPPublicKey> pkeys = pubRing.getPublicKeys();
         while (pkeys.hasNext()) {
             PGPPublicKey key = pkeys.next();
             if (key.isMasterKey()) {
@@ -82,7 +94,7 @@ public class CertificateGenerator {
         }
 
         // secret keys
-        Iterator<PGPSecretKey> skeys = secRing.getSecretKeys();
+		Iterator<PGPSecretKey> skeys = secRing.getSecretKeys();
         while (skeys.hasNext()) {
             PGPSecretKey key = skeys.next();
             PGPSecretKey sec = secRing.getSecretKey();
@@ -107,17 +119,33 @@ public class CertificateGenerator {
         serverKeyPair = new PGPDecryptedKeyPairRing(signKp, encryptKp);
     }
 
-    private void signUserKey() {
-        // TODO
+    /** Creates self-signed keys and all the keyring data. */
+    private void createKeyRings() throws PGPException {
+    	userStoredKeypair = PGP.store(userKeyPair, userId, userPassphrase);
     }
 
+    /** Signs the user key with the server key. */
+    private void signUserKey() throws SignatureException, PGPException, IOException {
+    	PGPPublicKey signed = PGP.signPublicKey(serverKeyPair.signKey,
+    		userStoredKeypair.publicKey.getPublicKey(), userId);
+
+    	userStoredKeypair.publicKey = PGPPublicKeyRing
+    		.insertPublicKey(userStoredKeypair.publicKey, signed);
+    }
+
+    /** Creates the X.509 bridge certificate. */
     private void createBridgeCert() {
         // TODO
     }
 
     private boolean validate(JCommander args) {
-        if (serverSecretKeyring == null || serverPublicKeyring == null)
+        if (userId == null || serverSecretKeyring == null || serverPublicKeyring == null)
             return false;
+
+        if (userPassphrase == null) {
+        	userPassphrase = RandomString.generate(20);
+        	log("generating random passphrase: %s", userPassphrase);
+        }
 
         // TODO
         return true;
@@ -138,6 +166,9 @@ public class CertificateGenerator {
         else {
             // TODO use existing key
         }
+
+        // create keyrings
+        createKeyRings();
 
         // sign user key with server key
         signUserKey();
