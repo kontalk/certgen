@@ -2,13 +2,17 @@ package org.kontalk.certgen;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.security.SignatureException;
 import java.util.Iterator;
 
 import org.bouncycastle.bcpg.ArmoredInputStream;
+import org.bouncycastle.bcpg.ArmoredOutputStream;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPKeyPair;
+import org.bouncycastle.openpgp.PGPKeyRing;
 import org.bouncycastle.openpgp.PGPPrivateKey;
 import org.bouncycastle.openpgp.PGPPublicKey;
 import org.bouncycastle.openpgp.PGPPublicKeyRing;
@@ -51,6 +55,12 @@ public class CertificateGenerator {
     @Parameter(names = "--passphrase", description = "PGP user passphrase (default: random)")
     public String userPassphrase;
 
+    @Parameter(names = "--out-privatekey", description = "Path to save PGP secret key")
+    public String userSecretKeyring = "privatekey.asc";
+
+    @Parameter(names = "--out-publickey", description = "Path to save PGP public key")
+    public String userPublicKeyring = "publickey.asc";
+
     private PGPDecryptedKeyPairRing serverKeyPair;
     private PGPDecryptedKeyPairRing userKeyPair;
 
@@ -66,6 +76,7 @@ public class CertificateGenerator {
         KeyFingerPrintCalculator fpr = new BcKeyFingerprintCalculator();
         PGPSecretKeyRing secRing = new PGPSecretKeyRing(new ArmoredInputStream(new FileInputStream(serverSecretKeyring)), fpr);
         PGPPublicKeyRing pubRing = new PGPPublicKeyRing(new ArmoredInputStream(new FileInputStream(serverPublicKeyring)), fpr);
+        // we don't care closing the streams :)
 
         PGPDigestCalculatorProvider sha1Calc = new JcaPGPDigestCalculatorProviderBuilder().build();
         PBESecretKeyDecryptor decryptor = new JcePBESecretKeyDecryptorBuilder(sha1Calc)
@@ -138,13 +149,32 @@ public class CertificateGenerator {
         // TODO
     }
 
+    /** Writes everything to files. */
+    private void writeFiles() throws IOException {
+
+    	// public keyring
+    	writeKeyring(userStoredKeypair.publicKey, userPublicKeyring);
+
+    	// secret keyring
+    	writeKeyring(userStoredKeypair.secretKey, userSecretKeyring);
+
+    	// TODO bridge certificate & key
+
+    }
+
+    private void writeKeyring(PGPKeyRing keyring, String filename) throws IOException {
+    	OutputStream out = new ArmoredOutputStream(new FileOutputStream(filename));
+    	keyring.encode(out);
+    	out.close();
+    }
+
     private boolean validate(JCommander args) {
         if (userId == null || serverSecretKeyring == null || serverPublicKeyring == null)
             return false;
 
         if (userPassphrase == null) {
         	userPassphrase = RandomString.generate(20);
-        	log("generating random passphrase: %s", userPassphrase);
+        	log("Generating random passphrase: %s", userPassphrase);
         }
 
         // TODO
@@ -168,15 +198,21 @@ public class CertificateGenerator {
         }
 
         // create keyrings
+        log("Creating keyrings.");
         createKeyRings();
 
         // sign user key with server key
+        log("Signing key.");
         signUserKey();
 
         // generate bridge certificate and sign it
+        log("Creating X.509 bridge certificate.");
         createBridgeCert();
 
-        // TODO
+        // write to disk
+        log("Writing keys.");
+        writeFiles();
+
         return 0;
     }
 
