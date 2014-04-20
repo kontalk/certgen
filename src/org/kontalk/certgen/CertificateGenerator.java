@@ -3,9 +3,16 @@ package org.kontalk.certgen;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
 import java.security.SignatureException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.Iterator;
 
 import org.bouncycastle.bcpg.ArmoredInputStream;
@@ -24,6 +31,7 @@ import org.bouncycastle.openpgp.operator.PGPDigestCalculatorProvider;
 import org.bouncycastle.openpgp.operator.bc.BcKeyFingerprintCalculator;
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPDigestCalculatorProviderBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyDecryptorBuilder;
+import org.bouncycastle.openssl.PEMWriter;
 import org.kontalk.certgen.PGP.PGPDecryptedKeyPairRing;
 import org.kontalk.certgen.PGP.PGPKeyPairRing;
 
@@ -61,10 +69,19 @@ public class CertificateGenerator {
     @Parameter(names = "--out-publickey", description = "Path to save PGP public key")
     public String userPublicKeyring = "publickey.asc";
 
+    @Parameter(names = "--out-logincert", description = "Path to save X.509 bridge certificate")
+    public String userBridgeCert = "login.crt";
+
+    @Parameter(names = "--out-loginkey", description = "Path to save X.509 bridge key")
+    public String userBridgeKey = "login.key";
+
     private PGPDecryptedKeyPairRing serverKeyPair;
     private PGPDecryptedKeyPairRing userKeyPair;
 
     private PGPKeyPairRing userStoredKeypair;
+
+    private X509Certificate bridgeCert;
+    private PrivateKey bridgeKey;
 
     public static void log(String fmt, Object... args) {
         System.err.println(String.format(fmt, args));
@@ -144,9 +161,18 @@ public class CertificateGenerator {
     		.insertPublicKey(userStoredKeypair.publicKey, signed);
     }
 
-    /** Creates the X.509 bridge certificate. */
-    private void createBridgeCert() {
-        // TODO
+    /** Creates the X.509 bridge certificate and key. */
+    private void createBridgeCert()
+    		throws InvalidKeyException, IllegalStateException,
+    		NoSuchAlgorithmException, SignatureException,
+    		CertificateException, NoSuchProviderException,
+    		PGPException, IOException {
+
+    	bridgeCert = X509Bridge
+    		.createCertificate(userStoredKeypair.publicKey,
+    		userKeyPair.signKey.getPrivateKey(), null);
+
+    	bridgeKey = PGP.convertPrivateKey(userKeyPair.signKey.getPrivateKey());
     }
 
     /** Writes everything to files. */
@@ -158,14 +184,23 @@ public class CertificateGenerator {
     	// secret keyring
     	writeKeyring(userStoredKeypair.secretKey, userSecretKeyring);
 
-    	// TODO bridge certificate & key
+    	// bridge certificate
+    	writePEM(bridgeCert, userBridgeCert);
 
+    	// bridge key
+    	writePEM(bridgeKey, userBridgeKey);
     }
 
     private void writeKeyring(PGPKeyRing keyring, String filename) throws IOException {
     	OutputStream out = new ArmoredOutputStream(new FileOutputStream(filename));
     	keyring.encode(out);
     	out.close();
+    }
+
+    private void writePEM(Object object, String filename) throws IOException {
+    	PEMWriter writer = new PEMWriter(new FileWriter(filename));
+    	writer.writeObject(object);
+    	writer.close();
     }
 
     private boolean validate(JCommander args) {
