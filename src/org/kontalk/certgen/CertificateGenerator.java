@@ -32,6 +32,7 @@ import org.bouncycastle.openpgp.operator.bc.BcKeyFingerprintCalculator;
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPDigestCalculatorProviderBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyDecryptorBuilder;
 import org.bouncycastle.openssl.PEMWriter;
+import org.bouncycastle.operator.OperatorCreationException;
 import org.kontalk.certgen.PGP.PGPDecryptedKeyPairRing;
 import org.kontalk.certgen.PGP.PGPKeyPairRing;
 
@@ -166,7 +167,7 @@ public class CertificateGenerator {
     		throws InvalidKeyException, IllegalStateException,
     		NoSuchAlgorithmException, SignatureException,
     		CertificateException, NoSuchProviderException,
-    		PGPException, IOException {
+    		PGPException, IOException, OperatorCreationException {
 
     	bridgeCert = X509Bridge
     		.createCertificate(userStoredKeypair.publicKey,

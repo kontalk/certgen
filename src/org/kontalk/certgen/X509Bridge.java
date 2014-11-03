@@ -34,22 +34,30 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.text.DateFormat;
 import java.util.Date;
 import java.util.Iterator;
-import java.util.Vector;
 
-import org.bouncycastle.asn1.DERObjectIdentifier;
+import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.misc.MiscObjectIdentifiers;
 import org.bouncycastle.asn1.misc.NetscapeCertType;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.X500NameBuilder;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.AuthorityKeyIdentifier;
 import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
-import org.bouncycastle.asn1.x509.X509Extensions;
-import org.bouncycastle.asn1.x509.X509Name;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.X509v3CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
+import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPPrivateKey;
 import org.bouncycastle.openpgp.PGPPublicKey;
@@ -62,9 +70,13 @@ import org.bouncycastle.openpgp.operator.PGPDigestCalculatorProvider;
 import org.bouncycastle.openpgp.operator.bc.BcKeyFingerprintCalculator;
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPDigestCalculatorProviderBuilder;
 import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyDecryptorBuilder;
-import org.bouncycastle.x509.X509V3CertificateGenerator;
-import org.bouncycastle.x509.extension.AuthorityKeyIdentifierStructure;
-import org.bouncycastle.x509.extension.SubjectKeyIdentifierStructure;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.bc.BcContentSignerBuilder;
+import org.bouncycastle.operator.bc.BcDSAContentSignerBuilder;
+import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
 
 
 /**
@@ -81,9 +93,9 @@ public class X509Bridge {
     }
 
     public static X509Certificate createCertificate(byte[] publicKeyData, PGPSecretKey secretKey, String passphrase, String subjectAltName)
-            throws PGPException, InvalidKeyException, IllegalStateException,
-            NoSuchAlgorithmException, SignatureException, CertificateException,
-            NoSuchProviderException, IOException {
+        throws PGPException, InvalidKeyException, IllegalStateException,
+        NoSuchAlgorithmException, SignatureException, CertificateException,
+        NoSuchProviderException, IOException, OperatorCreationException {
 
         KeyFingerPrintCalculator fpr = new BcKeyFingerprintCalculator();
         PGPPublicKeyRing pubRing = new PGPPublicKeyRing(publicKeyData, fpr);
@@ -93,9 +105,9 @@ public class X509Bridge {
     }
 
     public static X509Certificate createCertificate(PGPPublicKeyRing publicKeyring, PGPSecretKey secretKey, String passphrase, String subjectAltName)
-            throws PGPException, InvalidKeyException, IllegalStateException,
-            NoSuchAlgorithmException, SignatureException, CertificateException,
-            NoSuchProviderException, IOException {
+        throws PGPException, InvalidKeyException, IllegalStateException,
+        NoSuchAlgorithmException, SignatureException, CertificateException,
+        NoSuchProviderException, IOException, OperatorCreationException {
 
         // extract the private key
         PGPDigestCalculatorProvider sha1Calc = new JcaPGPDigestCalculatorProviderBuilder().build();
@@ -110,7 +122,7 @@ public class X509Bridge {
 
     public static X509Certificate createCertificate(byte[] privateKeyData, byte[] publicKeyData, String passphrase, String subjectAltName)
         throws PGPException, IOException, InvalidKeyException, IllegalStateException,
-        NoSuchAlgorithmException, SignatureException, CertificateException, NoSuchProviderException {
+        NoSuchAlgorithmException, SignatureException, CertificateException, NoSuchProviderException, OperatorCreationException {
 
         KeyFingerPrintCalculator fpr = new BcKeyFingerprintCalculator();
         PGPSecretKeyRing secRing = new PGPSecretKeyRing(privateKeyData, fpr);
@@ -128,8 +140,8 @@ public class X509Bridge {
     }
 
     public static X509Certificate createCertificate(byte[] publicKeyData, PGPPrivateKey privateKey, String subjectAltName)
-            throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException,
-                SignatureException, CertificateException, NoSuchProviderException, PGPException, IOException {
+        throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException,
+        SignatureException, CertificateException, NoSuchProviderException, PGPException, IOException, OperatorCreationException {
 
         KeyFingerPrintCalculator fpr = new BcKeyFingerprintCalculator();
         PGPPublicKeyRing pubRing = new PGPPublicKeyRing(publicKeyData, fpr);
@@ -138,28 +150,26 @@ public class X509Bridge {
     }
 
     public static X509Certificate createCertificate(PGPPublicKeyRing publicKeyRing, PGPPrivateKey privateKey, String subjectAltName)
-            throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException,
-                SignatureException, CertificateException, NoSuchProviderException, PGPException, IOException {
+        throws InvalidKeyException, IllegalStateException, NoSuchAlgorithmException,
+        SignatureException, CertificateException, NoSuchProviderException, PGPException, IOException, OperatorCreationException {
+
+        X500NameBuilder x500NameBuilder = new X500NameBuilder();
 
         /*
          * The X.509 Name to be the subject DN is prepared.
          * The CN is extracted from the Secret Key user ID.
          */
-        Vector<DERObjectIdentifier> x509NameOids = new Vector<DERObjectIdentifier>();
-        Vector<String> x509NameValues = new Vector<String>();
 
-        x509NameOids.add(X509Name.O);
-        x509NameValues.add(DN_COMMON_PART_O);
+        x500NameBuilder.addRDN(BCStyle.O, DN_COMMON_PART_O);
 
         PGPPublicKey publicKey = publicKeyRing.getPublicKey();
 
         for (@SuppressWarnings("unchecked") Iterator<Object> it = publicKey.getUserIDs(); it.hasNext();) {
             Object attrib = it.next();
-            x509NameOids.add(X509Name.CN);
-            x509NameValues.add(attrib.toString());
+            x500NameBuilder.addRDN(BCStyle.CN, attrib.toString());
         }
 
-        X509Name x509name = new X509Name(x509NameOids, x509NameValues);
+        X500Name x509name = x500NameBuilder.build();
 
         /*
          * To check the signature from the certificate on the recipient side,
@@ -177,7 +187,9 @@ public class X509Bridge {
            validTo=new Date(creationTime.getTime() + 1000L * publicKey.getValidSeconds());
 
         return createCertificate(
-                publicKey.getKey(PGP.PROVIDER), privateKey.getKey(), x509name,
+                PGP.convertPublicKey(publicKey),
+                PGP.convertPrivateKey(privateKey),
+                x509name,
                 creationTime, validTo,
                 subjectAltName,
                 publicKeyRing.getEncoded());
@@ -202,35 +214,51 @@ public class X509Bridge {
      *            (defaults to current date and time if null)
      * @param endDate
      *            date until which the certificate will be valid
-     *            (defaults to current date and time if null)     *
-     * @param subjAltNameURI
+     *            (defaults to start date and time if null)
+     * @param subjectAltName
      *            URI to be placed in subjectAltName
      * @return self-signed certificate
-     * @throws InvalidKeyException
-     * @throws SignatureException
-     * @throws NoSuchAlgorithmException
-     * @throws IllegalStateException
-     * @throws NoSuchProviderException
-     * @throws CertificateException
-     * @throws Exception
      */
     private static X509Certificate createCertificate(PublicKey pubKey,
-            PrivateKey privKey, X509Name subject,
+            PrivateKey privKey, X500Name subject,
             Date startDate, Date endDate, String subjectAltName, byte[] publicKeyData)
-            throws InvalidKeyException, IllegalStateException,
-            NoSuchAlgorithmException, SignatureException, CertificateException,
-            NoSuchProviderException {
+        throws InvalidKeyException, IllegalStateException,
+        NoSuchAlgorithmException, SignatureException, CertificateException,
+        NoSuchProviderException, IOException, OperatorCreationException {
 
-        X509V3CertificateGenerator certGenerator = new X509V3CertificateGenerator();
-
-        certGenerator.reset();
         /*
-         * Sets up the subject distinguished name.
-         * Since it's a self-signed certificate, issuer and subject are the
-         * same.
+         * Sets the signature algorithm.
          */
-        certGenerator.setIssuerDN(subject);
-        certGenerator.setSubjectDN(subject);
+        BcContentSignerBuilder signerBuilder;
+        String pubKeyAlgorithm = pubKey.getAlgorithm();
+        if (pubKeyAlgorithm.equals("DSA")) {
+            AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder()
+                .find("SHA1WithDSA");
+            AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder()
+                .find(sigAlgId);
+            signerBuilder = new BcDSAContentSignerBuilder(sigAlgId, digAlgId);
+        }
+        else if (pubKeyAlgorithm.equals("RSA")) {
+            AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder()
+                .find("SHA1WithRSAEncryption");
+            AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder()
+                .find(sigAlgId);
+            signerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
+        }
+        /*
+        else if (pubKeyAlgorithm.equals("ECDSA")) {
+            // TODO is this even legal?
+            certGenerator.setSignatureAlgorithm("SHA1WithECDSA");
+        }
+        */
+        else {
+            throw new RuntimeException(
+                    "Algorithm not recognised: " + pubKeyAlgorithm);
+        }
+
+
+        AsymmetricKeyParameter keyp = PrivateKeyFactory.createKey(privKey.getEncoded());
+        ContentSigner signer = signerBuilder.build(keyp);
 
         /*
          * Sets up the validity dates.
@@ -238,75 +266,66 @@ public class X509Bridge {
         if (startDate == null) {
             startDate = new Date(System.currentTimeMillis());
         }
-        certGenerator.setNotBefore(startDate);
         if (endDate == null) {
-            endDate = new Date(startDate.getTime()+(365L*24L*60L*60L*1000L));
-               System.out.println("end date is="+ DateFormat.getDateInstance().format(endDate));
+            endDate = startDate;
         }
 
-        certGenerator.setNotAfter(endDate);
-
-        /*
-         * The serial-number of this certificate is 1. It makes sense
-         * because it's self-signed.
-         */
-        certGenerator.setSerialNumber(BigInteger.ONE);
-        /*
-         * Sets the public-key to embed in this certificate.
-         */
-        certGenerator.setPublicKey(pubKey);
-        /*
-         * Sets the signature algorithm.
-         */
-        String pubKeyAlgorithm = pubKey.getAlgorithm();
-        if (pubKeyAlgorithm.equals("DSA")) {
-            certGenerator.setSignatureAlgorithm("SHA1WithDSA");
-        }
-        else if (pubKeyAlgorithm.equals("RSA")) {
-            certGenerator.setSignatureAlgorithm("SHA1WithRSAEncryption");
-        }
-        else if (pubKeyAlgorithm.equals("ECDSA")) {
-            // TODO is this even legal?
-            certGenerator.setSignatureAlgorithm("SHA1WithECDSA");
-        }
-        else {
-            throw new RuntimeException(
-                    "Algorithm not recognised: " + pubKeyAlgorithm);
-        }
+        X509v3CertificateBuilder certBuilder = new X509v3CertificateBuilder(
+            /*
+             * Sets up the subject distinguished name.
+             * Since it's a self-signed certificate, issuer and subject are the
+             * same.
+             */
+            subject,
+            /*
+             * The serial-number of this certificate is 1. It makes sense
+             * because it's self-signed.
+             */
+            BigInteger.ONE,
+            startDate,
+            endDate,
+            subject,
+            /*
+             * Sets the public-key to embed in this certificate.
+             */
+            SubjectPublicKeyInfo.getInstance(new ASN1InputStream(pubKey.getEncoded()).readObject())
+        );
 
         /*
          * Adds the Basic Constraint (CA: true) extension.
          */
-        certGenerator.addExtension(X509Extensions.BasicConstraints, true,
+        certBuilder.addExtension(Extension.basicConstraints, true,
                 new BasicConstraints(true));
 
         /*
          * Adds the Key Usage extension.
          */
-        certGenerator.addExtension(X509Extensions.KeyUsage, true, new KeyUsage(
+        certBuilder.addExtension(Extension.keyUsage, true, new KeyUsage(
                 KeyUsage.digitalSignature | KeyUsage.nonRepudiation | KeyUsage.keyEncipherment | KeyUsage.keyAgreement | KeyUsage.keyCertSign));
 
         /*
          * Adds the Netscape certificate type extension.
          */
-        certGenerator.addExtension(MiscObjectIdentifiers.netscapeCertType,
+        certBuilder.addExtension(MiscObjectIdentifiers.netscapeCertType,
                 false, new NetscapeCertType(
                 NetscapeCertType.sslClient | NetscapeCertType.smime));
+
+        JcaX509ExtensionUtils extUtils = new JcaX509ExtensionUtils();
 
         /*
          * Adds the subject key identifier extension.
          */
         SubjectKeyIdentifier subjectKeyIdentifier =
-                new SubjectKeyIdentifierStructure(pubKey);
-        certGenerator.addExtension(X509Extensions.SubjectKeyIdentifier,
+                extUtils.createSubjectKeyIdentifier(pubKey);
+        certBuilder.addExtension(Extension.subjectKeyIdentifier,
                 false, subjectKeyIdentifier);
 
         /*
          * Adds the authority key identifier extension.
          */
         AuthorityKeyIdentifier authorityKeyIdentifier =
-                new AuthorityKeyIdentifierStructure(pubKey);
-        certGenerator.addExtension(X509Extensions.AuthorityKeyIdentifier,
+                extUtils.createAuthorityKeyIdentifier(pubKey);
+        certBuilder.addExtension(Extension.authorityKeyIdentifier,
                 false, authorityKeyIdentifier);
 
         /*
@@ -315,7 +334,7 @@ public class X509Bridge {
         if (subjectAltName != null) {
             GeneralNames subjectAltNames = new GeneralNames(new GeneralName(
                     GeneralName.otherName, subjectAltName));
-            certGenerator.addExtension(X509Extensions.SubjectAlternativeName,
+            certBuilder.addExtension(Extension.subjectAlternativeName,
                     false, subjectAltNames);
         }
 
@@ -324,33 +343,38 @@ public class X509Bridge {
          */
         SubjectPGPPublicKeyInfo publicKeyExtension =
             new SubjectPGPPublicKeyInfo(publicKeyData);
-        certGenerator.addExtension(SubjectPGPPublicKeyInfo.OID, false, publicKeyExtension);
+        certBuilder.addExtension(SubjectPGPPublicKeyInfo.OID, false, publicKeyExtension);
 
         /*
          * Creates and sign this certificate with the private key
          * corresponding to the public key of the certificate
          * (hence the name "self-signed certificate").
          */
-        X509Certificate cert = certGenerator.generate(privKey);
+        X509CertificateHolder holder = certBuilder.build(signer);
 
         /*
          * Checks that this certificate has indeed been correctly signed.
          */
+        X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
         cert.verify(pubKey);
 
         return cert;
     }
 
     public static X509Certificate load(byte[] certData)
-    		throws CertificateException, NoSuchProviderException {
+            throws CertificateException, NoSuchProviderException {
+        return load(new ByteArrayInputStream(certData));
+    }
+
+    public static X509Certificate load(InputStream certData)
+            throws CertificateException, NoSuchProviderException {
 
         CertificateFactory certFactory = CertificateFactory.getInstance("X.509", PGP.PROVIDER);
-        InputStream in = new ByteArrayInputStream(certData);
-        return (X509Certificate) certFactory.generateCertificate(in);
+        return (X509Certificate) certFactory.generateCertificate(certData);
     }
 
     public static KeyStore exportCertificate(X509Certificate certificate, PrivateKey privateKey)
-    		throws KeyStoreException, NoSuchProviderException, NoSuchAlgorithmException, CertificateException, IOException {
+            throws KeyStoreException, NoSuchProviderException, NoSuchAlgorithmException, CertificateException, IOException {
 
         KeyStore store = KeyStore.getInstance("PKCS12", PGP.PROVIDER);
 
