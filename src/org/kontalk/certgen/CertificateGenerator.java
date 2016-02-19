@@ -1,7 +1,6 @@
 package org.kontalk.certgen;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -90,7 +89,7 @@ public class CertificateGenerator {
 
     /** Loads the server keys internally. */
     @SuppressWarnings("unchecked")
-    private void loadServerKeys() throws FileNotFoundException, IOException, PGPException {
+    private void loadServerKeys() throws IOException, PGPException {
         KeyFingerPrintCalculator fpr = new BcKeyFingerprintCalculator();
         PGPSecretKeyRing secRing = new PGPSecretKeyRing(new ArmoredInputStream(new FileInputStream(serverSecretKeyring)), fpr);
         PGPPublicKeyRing pubRing = new PGPPublicKeyRing(new ArmoredInputStream(new FileInputStream(serverPublicKeyring)), fpr);
@@ -145,11 +144,11 @@ public class CertificateGenerator {
             throw new PGPException("invalid key data");
         }
 
-        serverKeyPair = new PGPDecryptedKeyPairRing(signKp, encryptKp);
+        serverKeyPair = new PGPDecryptedKeyPairRing(null, signKp, encryptKp);
     }
 
     /** Creates self-signed keys and all the keyring data. */
-    private void createKeyRings() throws PGPException {
+    private void createKeyRings() throws PGPException, IOException {
     	userStoredKeypair = PGP.store(userKeyPair, userId, userPassphrase);
     }
 
@@ -171,9 +170,9 @@ public class CertificateGenerator {
 
     	bridgeCert = X509Bridge
     		.createCertificate(userStoredKeypair.publicKey,
-    		userKeyPair.signKey.getPrivateKey(), null);
+    		userKeyPair.authKey.getPrivateKey());
 
-    	bridgeKey = PGP.convertPrivateKey(userKeyPair.signKey.getPrivateKey());
+    	bridgeKey = PGP.convertPrivateKey(userKeyPair.authKey.getPrivateKey());
     }
 
     /** Writes everything to files. */
