@@ -27,10 +27,7 @@ import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 import org.bouncycastle.asn1.misc.MiscObjectIdentifiers;
 import org.bouncycastle.asn1.misc.NetscapeCertType;
@@ -279,6 +276,7 @@ public class X509Bridge {
             BigInteger.ONE,
             startDate,
             endDate,
+            Locale.US,
             subject,
             /*
              * Sets the public-key to embed in this certificate.

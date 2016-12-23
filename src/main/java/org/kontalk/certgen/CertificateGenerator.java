@@ -1,29 +1,11 @@
 package org.kontalk.certgen;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.PrivateKey;
-import java.security.SignatureException;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.util.Iterator;
-
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import org.apache.commons.io.IOUtils;
 import org.bouncycastle.bcpg.ArmoredInputStream;
 import org.bouncycastle.bcpg.ArmoredOutputStream;
-import org.bouncycastle.openpgp.PGPException;
-import org.bouncycastle.openpgp.PGPKeyPair;
-import org.bouncycastle.openpgp.PGPKeyRing;
-import org.bouncycastle.openpgp.PGPPrivateKey;
-import org.bouncycastle.openpgp.PGPPublicKey;
-import org.bouncycastle.openpgp.PGPPublicKeyRing;
-import org.bouncycastle.openpgp.PGPSecretKey;
-import org.bouncycastle.openpgp.PGPSecretKeyRing;
+import org.bouncycastle.openpgp.*;
 import org.bouncycastle.openpgp.operator.KeyFingerPrintCalculator;
 import org.bouncycastle.openpgp.operator.PBESecretKeyDecryptor;
 import org.bouncycastle.openpgp.operator.PGPDigestCalculatorProvider;
@@ -35,8 +17,13 @@ import org.bouncycastle.operator.OperatorCreationException;
 import org.kontalk.certgen.PGP.PGPDecryptedKeyPairRing;
 import org.kontalk.certgen.PGP.PGPKeyPairRing;
 
-import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
+import java.io.*;
+import java.security.*;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Iterator;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 
 /**
@@ -74,6 +61,9 @@ public class CertificateGenerator {
 
     @Parameter(names = "--out-loginkey", description = "Path to save X.509 bridge key")
     public String userBridgeKey = "login.key";
+
+    @Parameter(names = "--out-personalkey", description = "Path to save personal key pack")
+    public String personalKey = PersonalKeyPack.KEYPACK_FILENAME;
 
     private PGPDecryptedKeyPairRing serverKeyPair;
     private PGPDecryptedKeyPairRing userKeyPair;
@@ -189,6 +179,13 @@ public class CertificateGenerator {
 
     	// bridge key
     	writePEM(bridgeKey, userBridgeKey);
+
+    	// personal key pack
+        writeZip(personalKey,
+            PersonalKeyPack.BRIDGE_KEY_FILENAME, userBridgeKey,
+            PersonalKeyPack.BRIDGE_CERT_FILENAME, userBridgeCert,
+            PersonalKeyPack.PRIVATE_KEY_FILENAME, userSecretKeyring,
+            PersonalKeyPack.PUBLIC_KEY_FILENAME, userPublicKeyring);
     }
 
     private void writeKeyring(PGPKeyRing keyring, String filename) throws IOException {
@@ -201,6 +198,20 @@ public class CertificateGenerator {
     	PEMWriter writer = new PEMWriter(new FileWriter(filename));
     	writer.writeObject(object);
     	writer.close();
+    }
+
+    private void writeZip(String filename, String... content) throws IOException {
+        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(filename))) {
+            for (int i = 0; i < content.length; i += 2) {
+                String zipFileName = content[i];
+                String zipFileContent = content[i+1];
+                zip.putNextEntry(new ZipEntry(zipFileName));
+                try (InputStream fileIn = new FileInputStream(zipFileContent)) {
+                    IOUtils.copy(fileIn, zip);
+                }
+                zip.closeEntry();
+            }
+        }
     }
 
     private boolean validate(JCommander args) {
