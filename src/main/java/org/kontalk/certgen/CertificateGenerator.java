@@ -147,8 +147,10 @@ public class CertificateGenerator {
     	PGPPublicKey signed = PGP.signPublicKey(serverKeyPair.signKey,
     		userStoredKeypair.publicKey.getPublicKey(), userId);
 
-    	userStoredKeypair.publicKey = PGPPublicKeyRing
-    		.insertPublicKey(userStoredKeypair.publicKey, signed);
+        userStoredKeypair.publicKey = PGPPublicKeyRing
+            .insertPublicKey(userStoredKeypair.publicKey, signed);
+        userStoredKeypair.secretKey = PGPSecretKeyRing
+            .replacePublicKeys(userStoredKeypair.secretKey, userStoredKeypair.publicKey);
     }
 
     /** Creates the X.509 bridge certificate and key. */
