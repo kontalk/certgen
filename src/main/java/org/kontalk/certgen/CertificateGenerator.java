@@ -81,24 +81,33 @@ public class CertificateGenerator {
     @SuppressWarnings("unchecked")
     private void loadServerKeys() throws IOException, PGPException {
         KeyFingerPrintCalculator fpr = new BcKeyFingerprintCalculator();
-        PGPSecretKeyRing secRing = new PGPSecretKeyRing(new ArmoredInputStream(new FileInputStream(serverSecretKeyring)), fpr);
-        PGPPublicKeyRing pubRing = new PGPPublicKeyRing(new ArmoredInputStream(new FileInputStream(serverPublicKeyring)), fpr);
+        PGPPublicKeyRing pubRing;
+        PGPSecretKeyRing secRing;
+        try {
+            secRing = new PGPSecretKeyRing(new ArmoredInputStream(new FileInputStream(serverSecretKeyring)), fpr);
+            pubRing = new PGPPublicKeyRing(new ArmoredInputStream(new FileInputStream(serverPublicKeyring)), fpr);
+        }
+        catch (IOException e) {
+            // try unarmored
+            secRing = new PGPSecretKeyRing(new FileInputStream(serverSecretKeyring), fpr);
+            pubRing = new PGPPublicKeyRing(new FileInputStream(serverPublicKeyring), fpr);
+        }
         // we don't care closing the streams :)
 
         PGPDigestCalculatorProvider sha1Calc = new JcaPGPDigestCalculatorProviderBuilder().build();
         PBESecretKeyDecryptor decryptor = new JcePBESecretKeyDecryptorBuilder(sha1Calc)
-            .setProvider(PGP.PROVIDER)
-            .build(serverPassphrase.toCharArray());
+                .setProvider(PGP.PROVIDER)
+                .build(serverPassphrase.toCharArray());
 
         PGPKeyPair signKp, encryptKp;
 
-        PGPPublicKey  signPub = null;
+        PGPPublicKey signPub = null;
         PGPPrivateKey signPriv = null;
-        PGPPublicKey   encPub = null;
-        PGPPrivateKey  encPriv = null;
+        PGPPublicKey encPub = null;
+        PGPPrivateKey encPriv = null;
 
         // public keys
-		Iterator<PGPPublicKey> pkeys = pubRing.getPublicKeys();
+        Iterator<PGPPublicKey> pkeys = pubRing.getPublicKeys();
         while (pkeys.hasNext()) {
             PGPPublicKey key = pkeys.next();
             if (key.isMasterKey()) {
@@ -112,7 +121,7 @@ public class CertificateGenerator {
         }
 
         // secret keys
-		Iterator<PGPSecretKey> skeys = secRing.getSecretKeys();
+        Iterator<PGPSecretKey> skeys = secRing.getSecretKeys();
         while (skeys.hasNext()) {
             PGPSecretKey key = skeys.next();
             PGPSecretKey sec = secRing.getSecretKey();
